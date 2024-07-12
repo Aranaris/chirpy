@@ -49,14 +49,15 @@ func main() {
 		Handler: mux,
 	}
 
-	h := handler{body:"Welcome to Chirpy"}
+	h := handler{body:"OK"}
 	apiCfg := apiConfig{fileServerHits: 0}
+	fs := http.FileServer(http.Dir("."))
+	prefixHandler := http.StripPrefix("/app", fs)
 
-	mux.Handle("/", http.FileServer(http.Dir('.')))
-	mux.Handle("/metrics/*", &apiCfg)
-	mux.Handle("/app/*", apiCfg.middlewareMetrics(h))
+	mux.Handle("GET /metrics/*", &apiCfg)
+	mux.Handle("GET /healthz/*", h)
+	mux.Handle("/app/*", apiCfg.middlewareMetrics(prefixHandler))
 	mux.Handle("/reset/*", apiCfg.resetMetrics(h))
-	mux.Handle("/healthz", h)
 
 	http.ListenAndServe(srv.Addr, srv.Handler)
 }
