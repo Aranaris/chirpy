@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"strings"
 )	
 
 type handler struct {
@@ -56,6 +57,45 @@ func (cfg *apiConfig) resetMetrics(next http.Handler) http.Handler {
 	})
 }
 
+//profane word list
+var p = []string{"kerfuffle", "sharbert", "fornax"}
+var sc = []byte{'!','?',',','.',';',':'}
+
+func replaceProfane(s string) string {
+	ns := ""
+	for i := 0; i < len(s); i++ {
+		for j := 0; j < len(p); j++ {
+			if i+len(p[j]) < len(s)  {
+				if strings.ToLower(s[i:i+len(p[j])]) == p[j] {
+					punctuation := false
+					for k := 0; k < len(sc); k++ {
+						if s[i+len(p[j])] == sc[k] {
+							punctuation = true
+							break
+						}
+					}
+					if !punctuation {
+						ns = fmt.Sprintf("%s****", ns)
+						i += len(p[j])
+						break
+					}
+				}	
+			}
+			if i+len(p[j]) == len(s) {
+				if strings.ToLower(s[i:]) == p[j]{
+					ns = fmt.Sprintf("%s****", ns)
+					i += len(p[j])				
+					break
+				}	
+			}
+		}
+		if i < len(s) {
+			ns = fmt.Sprintf("%s%s", ns, string(s[i]))
+		}
+	}
+	return ns
+}
+
 func (cfg *apiConfig) validateHandler(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		Body string `json:"body"`
@@ -86,12 +126,17 @@ func (cfg *apiConfig) validateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(params.Body) <= 140 {
+
+		rb := replaceProfane(params.Body)
+
 		type successReturnVal struct {
 			Valid bool `json:"valid"`
+			Cleaned string `json:"cleaned_body"`
 		}
 
 		returnVal := successReturnVal{
 			Valid: true,
+			Cleaned: rb,
 		}
 
 		msg, err := json.Marshal(returnVal)
@@ -104,7 +149,7 @@ func (cfg *apiConfig) validateHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write(msg)
 		return
 	}
-	
+
 	errorBody := errorReturnVal{
 		Error: "Chirp is too long",
 	}
@@ -130,9 +175,9 @@ func main() {
 	fs := http.FileServer(http.Dir("."))
 	prefixHandler := http.StripPrefix("/app", fs)
 
-	mux.Handle("GET /admin/metrics/", http.StripPrefix("/admin/", &apiCfg))
-	mux.Handle("GET /api/healthz/", h)
-	mux.Handle("/api/reset/", apiCfg.resetMetrics(h))
+	mux.Handle("GET /admin/metrics", http.StripPrefix("/admin/", &apiCfg))
+	mux.Handle("GET /api/healthz", h)
+	mux.Handle("/api/reset", apiCfg.resetMetrics(h))
 	mux.Handle("/app/*", apiCfg.middlewareMetrics(prefixHandler))
 	mux.HandleFunc("POST /api/validate_chirp", apiCfg.validateHandler)
 
