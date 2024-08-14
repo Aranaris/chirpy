@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -60,6 +61,7 @@ func (cfg *apiConfig) resetMetrics(next http.Handler) http.Handler {
 //profane word list
 var p = []string{"kerfuffle", "sharbert", "fornax"}
 var sc = []byte{'!','?',',','.',';',':'}
+var id = 1
 
 func replaceProfane(s string) string {
 	ns := ""
@@ -96,7 +98,7 @@ func replaceProfane(s string) string {
 	return ns
 }
 
-func (cfg *apiConfig) validateHandler(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) addChirpHandler(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		Body string `json:"body"`
 	}
@@ -121,46 +123,52 @@ func (cfg *apiConfig) validateHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		fmt.Printf("Error Decoding JSON: %s", err)
+		w.WriteHeader(201)
 		w.Write(msg)
 		return
 	}
-
-	if len(params.Body) <= 140 {
-
-		rb := replaceProfane(params.Body)
-
-		type successReturnVal struct {
-			Valid bool `json:"valid"`
-			Cleaned string `json:"cleaned_body"`
-		}
-
-		returnVal := successReturnVal{
-			Valid: true,
-			Cleaned: rb,
-		}
-
-		msg, err := json.Marshal(returnVal)
-		if err != nil {
-			fmt.Printf("Error marshalling JSON: %s", err)
-			w.WriteHeader(500)
-			return
-		}
-		w.WriteHeader(200)
-		w.Write(msg)
+	valid := validateChirpLength(params.Body)
+	if !valid {
+		err := errors.New("chirp is too long")
+		fmt.Printf("Invalid chirp body: %s", err)
+		w.WriteHeader(500)
 		return
 	}
-
-	errorBody := errorReturnVal{
-		Error: "Chirp is too long",
+	type successReturnVal struct {
+		Id int `json:"id"`
+		Body string `json:"body"`
 	}
-	msg, err := json.Marshal(errorBody)
+
+	returnVal := successReturnVal{
+		Id: id,
+		Body: replaceProfane(params.Body),
+	}
+	id += 1
+
+	msg, err := json.Marshal(returnVal)
 	if err != nil {
 		fmt.Printf("Error marshalling JSON: %s", err)
+		w.WriteHeader(500)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
+	w.WriteHeader(200)
 	w.Write(msg)
+}
+
+func validateChirpLength(c string) (bool) {
+	return len(c) <= 140 
+
+	// errorBody := errorReturnVal{
+	// 	Error: "Chirp is too long",
+	// }
+	// msg, err := json.Marshal(errorBody)
+	// if err != nil {
+	// 	fmt.Printf("Error marshalling JSON: %s", err)
+	// 	return
+	// }
+	// w.Header().Set("Content-Type", "application/json")
+	// w.WriteHeader(400)
+	// w.Write(msg)
 }
 
 func main() {
@@ -179,7 +187,9 @@ func main() {
 	mux.Handle("GET /api/healthz", h)
 	mux.Handle("/api/reset", apiCfg.resetMetrics(h))
 	mux.Handle("/app/*", apiCfg.middlewareMetrics(prefixHandler))
-	mux.HandleFunc("POST /api/validate_chirp", apiCfg.validateHandler)
+	// mux.HandleFunc("POST /api/validate_chirp", apiCfg.validateHandler)
+	mux.HandleFunc("POST /api/chirps", apiCfg.addChirpHandler)
+	// mux.HandleFunc("GET /api/chirps")
 
 	http.ListenAndServe(srv.Addr, srv.Handler)
 }
