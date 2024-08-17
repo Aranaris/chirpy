@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"internal/database"
 	"net/http"
 	"strings"
 )	
@@ -177,11 +178,14 @@ func main() {
 		Addr: ":8080",
 		Handler: mux,
 	}
+	database.NewDB(".")
+	
 
 	h := handler{body:"OK"}
 	apiCfg := apiConfig{fileServerHits: 0}
 	fs := http.FileServer(http.Dir("."))
 	prefixHandler := http.StripPrefix("/app", fs)
+
 
 	mux.Handle("GET /admin/metrics", http.StripPrefix("/admin/", &apiCfg))
 	mux.Handle("GET /api/healthz", h)
