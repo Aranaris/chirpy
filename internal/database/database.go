@@ -35,9 +35,12 @@ func NewDB(path string) (*DB, error) {
 	}
 
 	if err := os.Truncate(fp, 0); err != nil {
-		fmt.Println("failed to truncate")
+		fmt.Println("failed to clear file")
 		return nil, err
 	}
+
+	empty := DBStructure{Chirps: make(map[int]Chirp)}
+	err = db.writeDB(empty)
 
 	return &db, nil
 }
@@ -57,13 +60,13 @@ func (db *DB) EnsureDB() error {
 		fmt.Println(err)
 		return err
 	}
-	
+
 	return nil
 }
 
 func (db *DB) LoadDB() (*DBStructure, error) {
-	db.mutex.RLock()
-	defer db.mutex.RUnlock()
+	// db.mutex.RLock()
+	// defer db.mutex.RUnlock()
 	
 	f, err := os.ReadFile(db.path)
 	if err != nil {
@@ -71,12 +74,63 @@ func (db *DB) LoadDB() (*DBStructure, error) {
 	}
 
 	
-	chirps := DBStructure{}
-	if err := json.Unmarshal(f, &chirps); err != nil {
-		fmt.Println("Error decoding db json file")
+	dbStructure := DBStructure{}
+	if err := json.Unmarshal(f, &dbStructure); err != nil {
+		fmt.Println("Error decoding db json file", err)
 		return nil, err
 	}
 
-	return &chirps, nil
+	return &dbStructure, nil
 }
 
+func (db *DB) CreateChirp(body string) (Chirp, error) {
+	dbStructure, err := db.LoadDB()
+	if err != nil {
+		fmt.Println("error loading db")
+		return Chirp{}, err
+	}
+
+	chirps := dbStructure.Chirps
+
+	var maxNum int
+	for n := range chirps {
+		maxNum = n
+		break
+	}
+
+	for n := range chirps {
+		if n > maxNum {
+			maxNum = n
+		}
+	}
+
+	id := maxNum + 1
+
+	newChirp := Chirp{
+		ID: id,
+		Body: body,
+	}
+
+	dbStructure.Chirps[id] = newChirp
+	db.writeDB(*dbStructure)
+
+	return newChirp, nil
+}
+
+func (db *DB) writeDB(dbStructure DBStructure) error {
+	// db.mutex.Lock()
+	// defer db.mutex.Unlock()
+
+	f, err := json.Marshal(dbStructure)
+	if err != nil {
+		fmt.Println("error marshalling json: ", err)
+		return err
+	}
+
+	err = os.WriteFile(db.path, f, 0644)
+	if err != nil {
+		fmt.Println("error writing to db: ", err)
+		return err
+	}
+	return nil
+}

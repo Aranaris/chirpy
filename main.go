@@ -185,7 +185,20 @@ func main() {
 		fmt.Println("db error")
 	}
 
+	newChirp, err := db.CreateChirp("this is a new chirp")
+	if err != nil {
+		fmt.Println("create chirp error")
+	}
+	fmt.Println(newChirp)
 
+	secondChirp, err := db.CreateChirp("this is another chirp")
+	if err != nil {
+		fmt.Println("create chirp error")
+	}
+	fmt.Println(secondChirp)
+
+
+	
 	h := handler{body:"OK"}
 	apiCfg := apiConfig{fileServerHits: 0, db: db}
 	fs := http.FileServer(http.Dir("."))
