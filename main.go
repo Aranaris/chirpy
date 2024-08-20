@@ -16,6 +16,7 @@ type handler struct {
 
 type apiConfig struct {
 	fileServerHits int
+	db *database.DB
 }
 
 func outputHTML(w http.ResponseWriter, filename string, data interface{}) {
@@ -124,7 +125,7 @@ func (cfg *apiConfig) addChirpHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		fmt.Printf("Error Decoding JSON: %s", err)
-		w.WriteHeader(201)
+		w.WriteHeader(500)
 		w.Write(msg)
 		return
 	}
@@ -132,7 +133,7 @@ func (cfg *apiConfig) addChirpHandler(w http.ResponseWriter, r *http.Request) {
 	if !valid {
 		err := errors.New("chirp is too long")
 		fmt.Printf("Invalid chirp body: %s", err)
-		w.WriteHeader(500)
+		w.WriteHeader(400)
 		return
 	}
 	type successReturnVal struct {
@@ -178,11 +179,15 @@ func main() {
 		Addr: ":8080",
 		Handler: mux,
 	}
-	database.NewDB(".")
-	
+
+	db, err := database.NewDB(".")
+	if err != nil {
+		fmt.Println("db error")
+	}
+
 
 	h := handler{body:"OK"}
-	apiCfg := apiConfig{fileServerHits: 0}
+	apiCfg := apiConfig{fileServerHits: 0, db: db}
 	fs := http.FileServer(http.Dir("."))
 	prefixHandler := http.StripPrefix("/app", fs)
 

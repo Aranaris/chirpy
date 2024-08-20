@@ -10,7 +10,7 @@ import (
 
 type DB struct {
 	path string
-	mux  *sync.RWMutex
+	mutex  *sync.RWMutex
 }
 
 type Chirp struct {
