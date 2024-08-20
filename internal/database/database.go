@@ -1,6 +1,7 @@
 package database
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -14,7 +15,8 @@ type DB struct {
 }
 
 type Chirp struct {
-	body string
+	ID int `json:"id"`
+	Body string `json:"body"`
 }
 
 type DBStructure struct {
@@ -25,6 +27,7 @@ func NewDB(path string) (*DB, error) {
 	fp := path + "/database.json"
 	
 	db := DB{path: fp}
+
 	err := db.EnsureDB()
 	if err != nil {
 		fmt.Println(err)
@@ -41,6 +44,8 @@ func NewDB(path string) (*DB, error) {
 
 func (db *DB) EnsureDB() error {
 	f, err := os.Open(db.path)
+	defer f.Close()
+
 	if errors.Is(err, fs.ErrNotExist) {
 		fmt.Println("file does not exist: creating...")
 		_, err := os.Create(db.path)
@@ -52,8 +57,26 @@ func (db *DB) EnsureDB() error {
 		fmt.Println(err)
 		return err
 	}
-	f.Close()
+	
 	return nil
 }
 
+func (db *DB) LoadDB() (*DBStructure, error) {
+	db.mutex.RLock()
+	defer db.mutex.RUnlock()
+	
+	f, err := os.ReadFile(db.path)
+	if err != nil {
+		return nil, err
+	}
+
+	
+	chirps := DBStructure{}
+	if err := json.Unmarshal(f, &chirps); err != nil {
+		fmt.Println("Error decoding db json file")
+		return nil, err
+	}
+
+	return &chirps, nil
+}
 
