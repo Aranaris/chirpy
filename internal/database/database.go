@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"sort"
 	"sync"
 )
 
@@ -132,6 +133,10 @@ func (db *DB) GetChirps() ([]Chirp, error) {
 	for _, value := range chirps {
 		v = append(v, value)
 	}
+
+	sort.Slice(v, func(i, j int) bool {
+		return v[i].ID < v[j].ID
+	})
 
 	return v, nil
 }

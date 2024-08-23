@@ -143,17 +143,7 @@ func (cfg *apiConfig) addChirpHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type successReturnVal struct {
-		Id int `json:"id"`
-		Body string `json:"body"`
-	}
-
-	returnVal := successReturnVal{
-		Id: chirp.ID,
-		Body: chirp.Body,
-	}
-
-	msg, err := json.Marshal(returnVal)
+	msg, err := json.Marshal(chirp)
 	if err != nil {
 		fmt.Printf("Error marshalling JSON: %s", err)
 		w.WriteHeader(500)
@@ -163,20 +153,27 @@ func (cfg *apiConfig) addChirpHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(msg)
 }
 
+func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, r *http.Request) {
+	chirps, err := cfg.db.GetChirps()
+	if err != nil {
+		fmt.Printf("Error getting chirps: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+
+	msg, err := json.Marshal(chirps)
+	if err != nil {
+		fmt.Printf("Error marshalling JSON: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+
+	w.WriteHeader(200)
+	w.Write(msg)
+}
+
 func validateChirpLength(c string) (bool) {
 	return len(c) <= 140 
-
-	// errorBody := errorReturnVal{
-	// 	Error: "Chirp is too long",
-	// }
-	// msg, err := json.Marshal(errorBody)
-	// if err != nil {
-	// 	fmt.Printf("Error marshalling JSON: %s", err)
-	// 	return
-	// }
-	// w.Header().Set("Content-Type", "application/json")
-	// w.WriteHeader(400)
-	// w.Write(msg)
 }
 
 func main() {
@@ -190,14 +187,6 @@ func main() {
 	if err != nil {
 		fmt.Println("db error")
 	}
-
-	chirps, err := db.GetChirps()
-	if err != nil {
-		fmt.Println("Get Chirps error")
-	}
-	fmt.Println(chirps)
-
-
 	
 	h := handler{body:"OK"}
 	apiCfg := apiConfig{fileServerHits: 0, db: db}
@@ -209,9 +198,8 @@ func main() {
 	mux.Handle("GET /api/healthz", h)
 	mux.Handle("/api/reset", apiCfg.resetMetrics(h))
 	mux.Handle("/app/*", apiCfg.middlewareMetrics(prefixHandler))
-	// mux.HandleFunc("POST /api/validate_chirp", apiCfg.validateHandler)
 	mux.HandleFunc("POST /api/chirps", apiCfg.addChirpHandler)
-	// mux.HandleFunc("GET /api/chirps")
+	mux.HandleFunc("GET /api/chirps", apiCfg.getChirpsHandler)
 
 	http.ListenAndServe(srv.Addr, srv.Handler)
 }
