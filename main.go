@@ -201,6 +201,53 @@ func validateChirpLength(c string) (bool) {
 	return len(c) <= 140 
 }
 
+func (cfg *apiConfig) addUserHandler(w http.ResponseWriter, r *http.Request) {
+	type parameters struct {
+		Email string `json:"email"`
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	params := parameters{}
+
+	type errorReturnVal struct {
+		Error string `json:"error"`
+	}
+	
+	if err := decoder.Decode(&params); err != nil {
+		errorBody := errorReturnVal{
+			Error: "Something went wrong",
+		}
+
+		msg, err := json.Marshal(errorBody)
+		if err != nil {
+			fmt.Printf("Error marshalling JSON: %s", err)
+			w.WriteHeader(500)
+			return
+		}
+
+		fmt.Printf("Error Decoding JSON: %s", err)
+		w.WriteHeader(500)
+		w.Write(msg)
+		return
+	}
+	
+	user, err := cfg.db.CreateUser(params.Email)
+	if err != nil {
+		fmt.Printf("Error creating user: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+
+	msg, err := json.Marshal(user)
+	if err != nil {
+		fmt.Printf("Error marshalling JSON: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+	w.WriteHeader(201)
+	w.Write(msg)
+}
+
 func main() {
 	mux := http.NewServeMux()
 	srv := &http.Server{
@@ -226,6 +273,7 @@ func main() {
 	mux.HandleFunc("POST /api/chirps", apiCfg.addChirpHandler)
 	mux.HandleFunc("GET /api/chirps", apiCfg.getChirpsHandler)
 	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.getChirpByIDHandler)
+	mux.HandleFunc("POST /api/users", apiCfg.addUserHandler)
 
 	http.ListenAndServe(srv.Addr, srv.Handler)
 }

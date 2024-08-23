@@ -53,7 +53,7 @@ func NewDB(path string) (*DB, error) {
 		Chirps: make(map[int]Chirp),
 		Users: make(map[int]User),
 	}
-	
+
 	err = db.writeDB(empty)
 
 	return &db, nil
@@ -190,4 +190,38 @@ func (db *DB) GetChirpByID(idString string) (Chirp, error) {
 	}
 
 	return dbStructure.Chirps[id], nil
+}
+
+func (db *DB) CreateUser(email string) (User, error) {
+	dbStructure, err := db.LoadDB()
+	if err != nil {
+		fmt.Println("Error loading db structure")
+		return User{}, err
+	}
+
+	users := dbStructure.Users
+
+	var maxNum int
+	for n := range users {
+		maxNum = n
+		break
+	}
+
+	for n := range users {
+		if n > maxNum {
+			maxNum = n
+		}
+	}
+
+	id := maxNum + 1
+
+	newUser := User{
+		ID: id,
+		Email: email,
+	}
+
+	dbStructure.Users[id] = newUser
+	db.writeDB(*dbStructure)
+
+	return newUser, nil
 }
