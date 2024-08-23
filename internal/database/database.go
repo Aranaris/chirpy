@@ -11,7 +11,7 @@ import (
 
 type DB struct {
 	path string
-	mutex  *sync.RWMutex
+	mutex sync.RWMutex
 }
 
 type Chirp struct {
@@ -65,8 +65,8 @@ func (db *DB) EnsureDB() error {
 }
 
 func (db *DB) LoadDB() (*DBStructure, error) {
-	// db.mutex.RLock()
-	// defer db.mutex.RUnlock()
+	db.mutex.RLock()
+	defer db.mutex.RUnlock()
 	
 	f, err := os.ReadFile(db.path)
 	if err != nil {
@@ -117,9 +117,28 @@ func (db *DB) CreateChirp(body string) (Chirp, error) {
 	return newChirp, nil
 }
 
+func (db *DB) GetChirps() ([]Chirp, error) {
+
+	dbStructure, err := db.LoadDB()
+	if err != nil {
+		fmt.Println("Error loading db structure")
+		return nil, err
+	}
+
+	chirps := dbStructure.Chirps
+
+	v := make([]Chirp, 0, len(chirps))
+
+	for _, value := range chirps {
+		v = append(v, value)
+	}
+
+	return v, nil
+}
+
 func (db *DB) writeDB(dbStructure DBStructure) error {
-	// db.mutex.Lock()
-	// defer db.mutex.Unlock()
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
 
 	f, err := json.Marshal(dbStructure)
 	if err != nil {

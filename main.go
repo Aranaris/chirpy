@@ -63,7 +63,6 @@ func (cfg *apiConfig) resetMetrics(next http.Handler) http.Handler {
 //profane word list
 var p = []string{"kerfuffle", "sharbert", "fornax"}
 var sc = []byte{'!','?',',','.',';',':'}
-var id = 1
 
 func replaceProfane(s string) string {
 	ns := ""
@@ -136,16 +135,23 @@ func (cfg *apiConfig) addChirpHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(400)
 		return
 	}
+
+	chirp, err := cfg.db.CreateChirp(replaceProfane(params.Body))
+	if err != nil {
+		fmt.Printf("Error creating chirp: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+
 	type successReturnVal struct {
 		Id int `json:"id"`
 		Body string `json:"body"`
 	}
 
 	returnVal := successReturnVal{
-		Id: id,
-		Body: replaceProfane(params.Body),
+		Id: chirp.ID,
+		Body: chirp.Body,
 	}
-	id += 1
 
 	msg, err := json.Marshal(returnVal)
 	if err != nil {
@@ -153,7 +159,7 @@ func (cfg *apiConfig) addChirpHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(500)
 		return
 	}
-	w.WriteHeader(200)
+	w.WriteHeader(201)
 	w.Write(msg)
 }
 
@@ -185,17 +191,11 @@ func main() {
 		fmt.Println("db error")
 	}
 
-	newChirp, err := db.CreateChirp("this is a new chirp")
+	chirps, err := db.GetChirps()
 	if err != nil {
-		fmt.Println("create chirp error")
+		fmt.Println("Get Chirps error")
 	}
-	fmt.Println(newChirp)
-
-	secondChirp, err := db.CreateChirp("this is another chirp")
-	if err != nil {
-		fmt.Println("create chirp error")
-	}
-	fmt.Println(secondChirp)
+	fmt.Println(chirps)
 
 
 	
