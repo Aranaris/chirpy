@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"sort"
+	"strconv"
 	"sync"
 )
 
@@ -20,9 +21,17 @@ type Chirp struct {
 	Body string `json:"body"`
 }
 
+type User struct {
+	ID int `json:"id"`
+	Email string `json:"email"`
+}
+
 type DBStructure struct {
 	Chirps map[int]Chirp `json:"chirps"`
+	Users map[int]User `json:"users"`
 }
+
+var ErrChirpID = errors.New("chirp id out of range")
 
 func NewDB(path string) (*DB, error) {
 	fp := path + "/database.json"
@@ -40,7 +49,11 @@ func NewDB(path string) (*DB, error) {
 		return nil, err
 	}
 
-	empty := DBStructure{Chirps: make(map[int]Chirp)}
+	empty := DBStructure{
+		Chirps: make(map[int]Chirp),
+		Users: make(map[int]User),
+	}
+	
 	err = db.writeDB(empty)
 
 	return &db, nil
@@ -157,4 +170,24 @@ func (db *DB) writeDB(dbStructure DBStructure) error {
 		return err
 	}
 	return nil
+}
+
+func (db *DB) GetChirpByID(idString string) (Chirp, error) {
+	dbStructure, err := db.LoadDB()
+	if err != nil {
+		fmt.Println("Error loading db structure")
+		return Chirp{}, err
+	}
+
+	id, err := strconv.Atoi(idString)
+	if err != nil {
+		fmt.Println("Error converting id")
+		return Chirp{}, err
+	}
+
+	if id > len(dbStructure.Chirps) {
+		return Chirp{}, ErrChirpID
+	}
+
+	return dbStructure.Chirps[id], nil
 }

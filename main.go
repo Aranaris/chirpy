@@ -172,6 +172,31 @@ func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(msg)
 }
 
+func (cfg *apiConfig) getChirpByIDHandler(w http.ResponseWriter, r *http.Request) {
+	idString := r.PathValue("chirpID")
+
+	chirp, err := cfg.db.GetChirpByID(idString)
+	if err != nil {
+		if err == database.ErrChirpID {
+			w.WriteHeader(404)
+			return
+		}
+		fmt.Printf("Error retrieving chirp: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+	
+	msg, err := json.Marshal(chirp)
+	if err != nil {
+		fmt.Printf("Error marshalling JSON: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+
+	w.WriteHeader(200)
+	w.Write(msg)
+}
+
 func validateChirpLength(c string) (bool) {
 	return len(c) <= 140 
 }
@@ -200,6 +225,7 @@ func main() {
 	mux.Handle("/app/*", apiCfg.middlewareMetrics(prefixHandler))
 	mux.HandleFunc("POST /api/chirps", apiCfg.addChirpHandler)
 	mux.HandleFunc("GET /api/chirps", apiCfg.getChirpsHandler)
+	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.getChirpByIDHandler)
 
 	http.ListenAndServe(srv.Addr, srv.Handler)
 }
