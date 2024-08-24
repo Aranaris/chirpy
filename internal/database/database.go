@@ -24,6 +24,7 @@ type Chirp struct {
 type User struct {
 	ID int `json:"id"`
 	Email string `json:"email"`
+	Password string `json:"password"`
 }
 
 type DBStructure struct {
@@ -192,7 +193,7 @@ func (db *DB) GetChirpByID(idString string) (Chirp, error) {
 	return dbStructure.Chirps[id], nil
 }
 
-func (db *DB) CreateUser(email string) (User, error) {
+func (db *DB) CreateUser(email string, hashed string) (User, error) {
 	dbStructure, err := db.LoadDB()
 	if err != nil {
 		fmt.Println("Error loading db structure")
@@ -218,6 +219,7 @@ func (db *DB) CreateUser(email string) (User, error) {
 	newUser := User{
 		ID: id,
 		Email: email,
+		Password: hashed,
 	}
 
 	dbStructure.Users[id] = newUser

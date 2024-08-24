@@ -8,6 +8,8 @@ import (
 	"internal/database"
 	"net/http"
 	"strings"
+
+	"golang.org/x/crypto/bcrypt"
 )	
 
 type handler struct {
@@ -100,12 +102,9 @@ func replaceProfane(s string) string {
 }
 
 func (cfg *apiConfig) addChirpHandler(w http.ResponseWriter, r *http.Request) {
-	type parameters struct {
-		Body string `json:"body"`
-	}
 
 	decoder := json.NewDecoder(r.Body)
-	params := parameters{}
+	params := database.Chirp{}
 
 	type errorReturnVal struct {
 		Error string `json:"error"`
@@ -202,12 +201,9 @@ func validateChirpLength(c string) (bool) {
 }
 
 func (cfg *apiConfig) addUserHandler(w http.ResponseWriter, r *http.Request) {
-	type parameters struct {
-		Email string `json:"email"`
-	}
 
 	decoder := json.NewDecoder(r.Body)
-	params := parameters{}
+	params := database.User{}
 
 	type errorReturnVal struct {
 		Error string `json:"error"`
@@ -230,8 +226,10 @@ func (cfg *apiConfig) addUserHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write(msg)
 		return
 	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(params.Password), 10)
+	user, err := cfg.db.CreateUser(params.Email, string(hashed))
 	
-	user, err := cfg.db.CreateUser(params.Email)
 	if err != nil {
 		fmt.Printf("Error creating user: %s", err)
 		w.WriteHeader(500)
