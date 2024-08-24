@@ -27,6 +27,11 @@ type User struct {
 	Password string `json:"password"`
 }
 
+type UserNoPassword struct {
+	ID int `json:"id"`
+	Email string `json:"email"`
+}
+
 type DBStructure struct {
 	Chirps map[int]Chirp `json:"chirps"`
 	Users map[int]User `json:"users"`
@@ -226,4 +231,25 @@ func (db *DB) CreateUser(email string, hashed string) (User, error) {
 	db.writeDB(*dbStructure)
 
 	return newUser, nil
+}
+
+func (db *DB) GetUserByEmail(email string) (User, error) {
+	dbStructure, err := db.LoadDB()
+	if err != nil {
+		fmt.Println("Error loading db structure")
+		return User{}, err
+	}
+
+	users := dbStructure.Users
+	user := User{}
+
+	for n := range users {
+		if users[n].Email == email {
+			user = users[n]
+		} else if n == len(users) {
+			return User{}, errors.New("User not found")
+		}
+	}
+
+	return user, nil
 }

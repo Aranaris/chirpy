@@ -228,6 +228,11 @@ func (cfg *apiConfig) addUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte(params.Password), 10)
+	if err != nil {
+		fmt.Println("Error generating password hash")
+		w.WriteHeader(500)
+	}
+
 	user, err := cfg.db.CreateUser(params.Email, string(hashed))
 	
 	if err != nil {
@@ -243,6 +248,60 @@ func (cfg *apiConfig) addUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(201)
+	w.Write(msg)
+}
+
+func (cfg *apiConfig) verifyUserHandler(w http.ResponseWriter, r *http.Request) {
+	decoder := json.NewDecoder(r.Body)
+	params := database.User{}
+
+	type errorReturnVal struct {
+		Error string `json:"error"`
+	}
+	
+	if err := decoder.Decode(&params); err != nil {
+		errorBody := errorReturnVal{
+			Error: "Something went wrong",
+		}
+
+		msg, err := json.Marshal(errorBody)
+		if err != nil {
+			fmt.Printf("Error marshalling JSON: %s", err)
+			w.WriteHeader(500)
+			return
+		}
+
+		fmt.Printf("Error Decoding JSON: %s", err)
+		w.WriteHeader(500)
+		w.Write(msg)
+		return
+	}
+
+	user, err := cfg.db.GetUserByEmail(params.Email)
+	if err != nil {
+		fmt.Printf("User %s not found", params.Email)
+		w.WriteHeader(400)
+		return
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(params.Password))
+	if err != nil {
+		w.WriteHeader(401)
+		return
+	}
+
+	userNoPass := database.UserNoPassword{
+		Email: user.Email,
+		ID: user.ID,
+	}
+
+	msg, err := json.Marshal(userNoPass)
+	if err != nil {
+		fmt.Printf("Error marshalling JSON: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+	w.WriteHeader(200)
 	w.Write(msg)
 }
 
@@ -272,6 +331,7 @@ func main() {
 	mux.HandleFunc("GET /api/chirps", apiCfg.getChirpsHandler)
 	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.getChirpByIDHandler)
 	mux.HandleFunc("POST /api/users", apiCfg.addUserHandler)
+	mux.HandleFunc("POST /api/login", apiCfg.verifyUserHandler)
 
 	http.ListenAndServe(srv.Addr, srv.Handler)
 }
