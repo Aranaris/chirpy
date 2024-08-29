@@ -8,8 +8,11 @@ import (
 	"internal/database"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
 )	
@@ -256,7 +259,12 @@ func (cfg *apiConfig) addUserHandler(w http.ResponseWriter, r *http.Request) {
 
 func (cfg *apiConfig) verifyUserHandler(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
-	params := database.User{}
+
+	type loginParams struct {
+		database.User
+		Expires int `json:"expires_in_seconds"`
+	}
+	params := loginParams{}
 
 	type errorReturnVal struct {
 		Error string `json:"error"`
@@ -293,9 +301,31 @@ func (cfg *apiConfig) verifyUserHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	current := time.Now()
+
+	expiration := params.Expires
+	if expiration == 0 || expiration > 24 * 3600 {
+		expiration = 24 * 3600 //default 24 hour expiration
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
+		Issuer: "chirpy",
+		IssuedAt: jwt.NewNumericDate(current),
+		ExpiresAt: jwt.NewNumericDate(current.Add(time.Second * time.Duration(expiration))),
+		Subject: strconv.Itoa(user.ID),
+	})
+
+	jwt, err := token.SignedString(cfg.jwtsecret)
+	if err != nil {
+		fmt.Printf("Error signing token: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+
 	userNoPass := database.UserNoPassword{
 		Email: user.Email,
 		ID: user.ID,
+		Token: jwt,
 	}
 
 	msg, err := json.Marshal(userNoPass)
