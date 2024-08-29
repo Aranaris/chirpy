@@ -7,8 +7,10 @@ import (
 	"html/template"
 	"internal/database"
 	"net/http"
+	"os"
 	"strings"
 
+	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
 )	
 
@@ -19,6 +21,7 @@ type handler struct {
 type apiConfig struct {
 	fileServerHits int
 	db *database.DB
+	jwtsecret string
 }
 
 func outputHTML(w http.ResponseWriter, filename string, data interface{}) {
@@ -306,6 +309,11 @@ func (cfg *apiConfig) verifyUserHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+    fmt.Println("Error loading .env file")
+  }
+	
 	mux := http.NewServeMux()
 	srv := &http.Server{
 		Addr: ":8080",
@@ -318,7 +326,11 @@ func main() {
 	}
 	
 	h := handler{body:"OK"}
-	apiCfg := apiConfig{fileServerHits: 0, db: db}
+	apiCfg := apiConfig{
+		fileServerHits: 0, 
+		db: db,
+		jwtsecret: os.Getenv("JWT_SECRET_KEY"),
+	}
 	fs := http.FileServer(http.Dir("."))
 	prefixHandler := http.StripPrefix("/app", fs)
 
