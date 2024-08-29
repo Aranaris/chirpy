@@ -315,17 +315,103 @@ func (cfg *apiConfig) verifyUserHandler(w http.ResponseWriter, r *http.Request) 
 		Subject: strconv.Itoa(user.ID),
 	})
 
-	jwt, err := token.SignedString(cfg.jwtsecret)
+	jwt, err := token.SignedString([]byte(cfg.jwtsecret))
 	if err != nil {
 		fmt.Printf("Error signing token: %s", err)
 		w.WriteHeader(500)
 		return
 	}
 
-	userNoPass := database.UserNoPassword{
+	userNoPass := database.User{
 		Email: user.Email,
 		ID: user.ID,
 		Token: jwt,
+	}
+
+	msg, err := json.Marshal(userNoPass)
+	if err != nil {
+		fmt.Printf("Error marshalling JSON: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+	w.WriteHeader(200)
+	w.Write(msg)
+}
+
+func (cfg *apiConfig) updateUserHandler(w http.ResponseWriter, r *http.Request) {
+	bearerToken := r.Header.Get("Authorization")
+	if bearerToken == "" {
+		fmt.Println("Unauthorized: No jwt in header")
+		w.WriteHeader(401)
+		return
+	}
+
+	bearerToken = strings.Replace(bearerToken, "Bearer ", "", 1)
+	token, err := jwt.ParseWithClaims(bearerToken, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) {
+    return []byte(cfg.jwtsecret), nil
+	})
+	if err != nil {
+		fmt.Printf("Error parsing jwt: %s", err)
+		w.WriteHeader(401)
+		return
+	}
+
+	userID, err := token.Claims.GetSubject()
+	if err != nil {
+		fmt.Printf("Error retrieving claims: %s", err)
+		w.WriteHeader(401)
+		return
+	}
+
+	ID, err := strconv.Atoi(userID)
+	if err != nil {
+		fmt.Printf("Error converting userID: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	params := database.User{}
+
+	type errorReturnVal struct {
+		Error string `json:"error"`
+	}
+	
+	if err := decoder.Decode(&params); err != nil {
+		errorBody := errorReturnVal{
+			Error: "Something went wrong",
+		}
+
+		msg, err := json.Marshal(errorBody)
+		if err != nil {
+			fmt.Printf("Error marshalling JSON: %s", err)
+			w.WriteHeader(500)
+			return
+		}
+
+		fmt.Printf("Error Decoding JSON: %s", err)
+		w.WriteHeader(500)
+		w.Write(msg)
+		return
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(params.Password), 10)
+	if err != nil {
+		fmt.Println("Error generating password hash")
+		w.WriteHeader(500)
+	}
+
+	params.Password = string(hashed)
+
+	user, err := cfg.db.UpdateUser(ID, params)
+	if err != nil {
+		fmt.Printf("Error updating user: %s", err)
+		w.WriteHeader(500)
+	}
+
+	userNoPass := database.User{
+		Email: user.Email,
+		ID: user.ID,
 	}
 
 	msg, err := json.Marshal(userNoPass)
@@ -374,6 +460,7 @@ func main() {
 	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.getChirpByIDHandler)
 	mux.HandleFunc("POST /api/users", apiCfg.addUserHandler)
 	mux.HandleFunc("POST /api/login", apiCfg.verifyUserHandler)
+	mux.HandleFunc("PUT /api/users", apiCfg.updateUserHandler)
 
 	http.ListenAndServe(srv.Addr, srv.Handler)
 }

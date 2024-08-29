@@ -23,14 +23,9 @@ type Chirp struct {
 
 type User struct {
 	ID int `json:"id"`
-	Email string `json:"email"`
-	Password string `json:"password"`
-}
-
-type UserNoPassword struct {
-	ID int `json:"id"`
-	Email string `json:"email"`
-	Token string `json:"token"`
+	Email string `json:"email,omitempty"`
+	Token string `json:"token,omitempty"`
+	Password string `json:"password,omitempty"`
 }
 
 type DBStructure struct {
@@ -247,6 +242,36 @@ func (db *DB) GetUserByEmail(email string) (User, error) {
 	for n := range users {
 		if users[n].Email == email {
 			user = users[n]
+		} else if n == len(users) {
+			return User{}, errors.New("User not found")
+		}
+	}
+
+	return user, nil
+}
+
+func (db *DB) UpdateUser(ID int, updatedUser User) (User, error) {
+	dbStructure, err := db.LoadDB()
+	if err != nil {
+		fmt.Println("Error loading db structure")
+		return User{}, err
+	}
+
+	users := dbStructure.Users
+	user := User{}
+
+	for n := range users {
+		if users[n].ID == ID {
+			user = users[n]
+			if updatedUser.Email != "" {
+				user.Email = updatedUser.Email
+			}
+			if updatedUser.Password != "" {
+				user.Password = updatedUser.Password
+			}
+			users[n] = user
+			db.writeDB(*dbStructure)
+			return user, nil
 		} else if n == len(users) {
 			return User{}, errors.New("User not found")
 		}
