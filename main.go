@@ -303,15 +303,15 @@ func (cfg *apiConfig) verifyUserHandler(w http.ResponseWriter, r *http.Request) 
 
 	current := time.Now()
 
-	expiration := params.Expires
-	if expiration == 0 || expiration > 24 * 3600 {
-		expiration = 24 * 3600 //default 24 hour expiration
+	accessTokenExp := params.Expires
+	if accessTokenExp == 0 || accessTokenExp > 1 * 3600 {
+		accessTokenExp = 1 * 3600 //default 1 hour expiration
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
 		Issuer: "chirpy",
 		IssuedAt: jwt.NewNumericDate(current),
-		ExpiresAt: jwt.NewNumericDate(current.Add(time.Second * time.Duration(expiration))),
+		ExpiresAt: jwt.NewNumericDate(current.Add(time.Second * time.Duration(accessTokenExp))),
 		Subject: strconv.Itoa(user.ID),
 	})
 
@@ -322,10 +322,18 @@ func (cfg *apiConfig) verifyUserHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	refreshToken, err := cfg.db.GenerateRefreshToken(user.ID)
+	if err != nil {
+		fmt.Printf("Error generating refresh token: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+
 	userNoPass := database.User{
 		Email: user.Email,
 		ID: user.ID,
 		Token: jwt,
+		RefreshToken: refreshToken,
 	}
 
 	msg, err := json.Marshal(userNoPass)

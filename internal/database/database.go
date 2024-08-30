@@ -1,6 +1,8 @@
 package database
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +11,9 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type DB struct {
@@ -25,12 +30,20 @@ type User struct {
 	ID int `json:"id"`
 	Email string `json:"email,omitempty"`
 	Token string `json:"token,omitempty"`
+	RefreshToken string `json:"refresh_token,omitempty"`
 	Password string `json:"password,omitempty"`
+}
+
+type RefreshToken struct {
+	Token string `json:"refresh_token"`
+	UserID int `json:"user_id"`
+	ExpiresAt *jwt.NumericDate `json:"expires"` 
 }
 
 type DBStructure struct {
 	Chirps map[int]Chirp `json:"chirps"`
 	Users map[int]User `json:"users"`
+	RefreshTokens map[string]RefreshToken `json:"refresh_tokens"`
 }
 
 var ErrChirpID = errors.New("chirp id out of range")
@@ -54,6 +67,7 @@ func NewDB(path string) (*DB, error) {
 	empty := DBStructure{
 		Chirps: make(map[int]Chirp),
 		Users: make(map[int]User),
+		RefreshTokens: make(map[string]RefreshToken),
 	}
 
 	err = db.writeDB(empty)
@@ -278,4 +292,43 @@ func (db *DB) UpdateUser(ID int, updatedUser User) (User, error) {
 	}
 
 	return user, nil
+}
+
+func (db *DB) GenerateRefreshToken(ID int) (string, error) {
+	b := make([]byte, 32)
+	_, err := rand.Read(b)
+	if err != nil {
+		fmt.Printf("Error generating refresh token: %s", err)
+		return "", err
+	}
+
+	refreshTokenString := hex.EncodeToString(b)
+
+	if err != nil {
+		fmt.Printf("Error saving refresh token to db: %s", err)
+		return "", err
+	}
+
+	current := time.Now()
+	expiration := jwt.NewNumericDate(current.Add(time.Second * time.Duration(60*24*3600)))
+
+	dbStructure, err := db.LoadDB()
+	if err != nil {
+		fmt.Println("error loading db")
+		return "" , err
+	}
+
+	refreshTokens := dbStructure.RefreshTokens
+
+	newRefreshToken := RefreshToken{
+		Token: refreshTokenString,
+		UserID: ID,
+		ExpiresAt: expiration,
+	}
+
+	refreshTokens[refreshTokenString] = newRefreshToken
+
+	db.writeDB(*dbStructure)
+
+	return refreshTokenString, nil
 }
