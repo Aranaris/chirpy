@@ -37,7 +37,7 @@ type User struct {
 type RefreshToken struct {
 	Token string `json:"refresh_token"`
 	UserID int `json:"user_id"`
-	ExpiresAt *jwt.NumericDate `json:"expires"` 
+	ExpiresAt time.Time `json:"expires"` 
 }
 
 type DBStructure struct {
@@ -310,7 +310,7 @@ func (db *DB) GenerateRefreshToken(ID int) (string, error) {
 	}
 
 	current := time.Now()
-	expiration := jwt.NewNumericDate(current.Add(time.Second * time.Duration(60*24*3600)))
+	expiration := current.Add(time.Second * time.Duration(60*24*3600))
 
 	dbStructure, err := db.LoadDB()
 	if err != nil {
@@ -331,4 +331,38 @@ func (db *DB) GenerateRefreshToken(ID int) (string, error) {
 	db.writeDB(*dbStructure)
 
 	return refreshTokenString, nil
+}
+
+func(db *DB) GenerateAccessToken(refreshtoken string) (string, error) {
+
+	dbStructure, err := db.LoadDB()
+	if err != nil {
+		fmt.Printf("Error loading db: %s", err)
+		return "", err
+	}
+
+	val, ok := dbStructure.RefreshTokens[refreshtoken]
+	if !ok {
+		return "", errors.New("refresh token not found")
+	}
+
+	current := time.Now()
+	if  val.ExpiresAt.Before(current) {
+		return "", errors.New("refresh token expired")
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
+		Issuer: "chirpy",
+		IssuedAt: jwt.NewNumericDate(current),
+		ExpiresAt: jwt.NewNumericDate(current.Add(time.Second * time.Duration(3600))),
+		Subject: strconv.Itoa(val.UserID),
+	})
+
+	newJWT, err := token.SignedString([]byte(os.Getenv("JWT_SECRET_KEY")))
+	if err != nil {
+		fmt.Printf("Error signing jwt: %s", err)
+		return "", err
+	}
+
+	return newJWT, nil
 }

@@ -10,7 +10,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
@@ -301,30 +300,16 @@ func (cfg *apiConfig) verifyUserHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	current := time.Now()
-
-	accessTokenExp := params.Expires
-	if accessTokenExp == 0 || accessTokenExp > 1 * 3600 {
-		accessTokenExp = 1 * 3600 //default 1 hour expiration
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
-		Issuer: "chirpy",
-		IssuedAt: jwt.NewNumericDate(current),
-		ExpiresAt: jwt.NewNumericDate(current.Add(time.Second * time.Duration(accessTokenExp))),
-		Subject: strconv.Itoa(user.ID),
-	})
-
-	jwt, err := token.SignedString([]byte(cfg.jwtsecret))
+	refreshToken, err := cfg.db.GenerateRefreshToken(user.ID)
 	if err != nil {
-		fmt.Printf("Error signing token: %s", err)
+		fmt.Printf("Error generating refresh token: %s", err)
 		w.WriteHeader(500)
 		return
 	}
 
-	refreshToken, err := cfg.db.GenerateRefreshToken(user.ID)
+	jwt, err := cfg.db.GenerateAccessToken(refreshToken)
 	if err != nil {
-		fmt.Printf("Error generating refresh token: %s", err)
+		fmt.Printf("Error generating access token: %s", err)
 		w.WriteHeader(500)
 		return
 	}
@@ -432,6 +417,38 @@ func (cfg *apiConfig) updateUserHandler(w http.ResponseWriter, r *http.Request) 
 	w.Write(msg)
 }
 
+func (cfg *apiConfig) refreshHandler(w http.ResponseWriter, r *http.Request) {
+	bearerToken := r.Header.Get("Authorization")
+	if bearerToken == "" {
+		fmt.Println("Unauthorized: No token in header")
+		w.WriteHeader(401)
+		return
+	}
+
+	bearerToken = strings.Replace(bearerToken, "Bearer ", "", 1)
+	newJWT, err := cfg.db.GenerateAccessToken(bearerToken)
+	if err != nil {
+		fmt.Printf("Error generating access token: %s", err)
+		w.WriteHeader(401)
+		return
+	}
+
+	type AccessTokenResponse struct {
+		Token string `json:"token"`
+	}
+	
+
+	msg, err := json.Marshal(AccessTokenResponse{Token:newJWT})
+	if err != nil {
+		fmt.Printf("Error marshalling JSON: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+
+	w.WriteHeader(200)
+	w.Write(msg)
+}
+
 func main() {
 	err := godotenv.Load()
 	if err != nil {
@@ -469,6 +486,7 @@ func main() {
 	mux.HandleFunc("POST /api/users", apiCfg.addUserHandler)
 	mux.HandleFunc("POST /api/login", apiCfg.verifyUserHandler)
 	mux.HandleFunc("PUT /api/users", apiCfg.updateUserHandler)
+	mux.HandleFunc("POST /api/refresh", apiCfg.refreshHandler)
 
 	http.ListenAndServe(srv.Addr, srv.Handler)
 }
