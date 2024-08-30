@@ -333,7 +333,7 @@ func (db *DB) GenerateRefreshToken(ID int) (string, error) {
 	return refreshTokenString, nil
 }
 
-func(db *DB) GenerateAccessToken(refreshtoken string) (string, error) {
+func (db *DB) GenerateAccessToken(refreshtoken string) (string, error) {
 
 	dbStructure, err := db.LoadDB()
 	if err != nil {
@@ -365,4 +365,22 @@ func(db *DB) GenerateAccessToken(refreshtoken string) (string, error) {
 	}
 
 	return newJWT, nil
+}
+
+func (db *DB) RevokeRefreshToken(refreshtoken string) error {
+	dbStructure, err := db.LoadDB()
+	if err != nil {
+		fmt.Printf("Error loading db: %s", err)
+		return err
+	}
+
+	delete(dbStructure.RefreshTokens, refreshtoken)
+
+	err = db.writeDB(*dbStructure)
+	if err != nil {
+		fmt.Printf("Error loading db: %s", err)
+		return err
+	}
+
+	return nil
 }

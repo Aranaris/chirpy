@@ -449,6 +449,25 @@ func (cfg *apiConfig) refreshHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(msg)
 }
 
+func (cfg *apiConfig) revokeHandler(w http.ResponseWriter, r *http.Request) {
+	bearerToken := r.Header.Get("Authorization")
+	if bearerToken == "" {
+		fmt.Println("Unauthorized: No token in header")
+		w.WriteHeader(401)
+		return
+	}
+
+	bearerToken = strings.Replace(bearerToken, "Bearer ", "", 1)
+	err := cfg.db.RevokeRefreshToken(bearerToken)
+	if err != nil {
+		fmt.Printf("Error revoking access token: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+
+	w.WriteHeader(204)
+}
+
 func main() {
 	err := godotenv.Load()
 	if err != nil {
@@ -487,6 +506,7 @@ func main() {
 	mux.HandleFunc("POST /api/login", apiCfg.verifyUserHandler)
 	mux.HandleFunc("PUT /api/users", apiCfg.updateUserHandler)
 	mux.HandleFunc("POST /api/refresh", apiCfg.refreshHandler)
+	mux.HandleFunc("POST /api/revoke", apiCfg.revokeHandler)
 
 	http.ListenAndServe(srv.Addr, srv.Handler)
 }
