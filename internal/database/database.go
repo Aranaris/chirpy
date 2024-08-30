@@ -48,6 +48,7 @@ type DBStructure struct {
 }
 
 var ErrChirpID = errors.New("chirp id out of range")
+var ErrAuthorization = errors.New("Unauthorized action")
 
 func NewDB(path string) (*DB, error) {
 	fp := path + "/database.json"
@@ -380,7 +381,34 @@ func (db *DB) RevokeRefreshToken(refreshtoken string) error {
 
 	err = db.writeDB(*dbStructure)
 	if err != nil {
-		fmt.Printf("Error loading db: %s", err)
+		fmt.Printf("Error writing to db: %s", err)
+		return err
+	}
+
+	return nil
+}
+
+func (db *DB) DeleteChirpFromDB(userID int, chirpID int) error {
+	dbStructure, err := db.LoadDB()
+	if err != nil {
+		fmt.Println("Error loading db structure")
+		return err
+	}
+
+	val, ok := dbStructure.Chirps[chirpID]
+	if !ok {
+		return ErrChirpID
+	}
+
+	if val.AuthorID != userID {
+		return ErrAuthorization
+	}
+
+	delete(dbStructure.Chirps, chirpID)
+
+	err = db.writeDB(*dbStructure)
+	if err != nil {
+		fmt.Printf("Error writing to db: %s", err)
 		return err
 	}
 

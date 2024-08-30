@@ -9,6 +9,7 @@ import (
 	"internal/database"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -469,6 +470,41 @@ func (cfg *apiConfig) revokeHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(204)
 }
 
+func (cfg *apiConfig) deleteChirpHandler(w http.ResponseWriter, r *http.Request) {
+	header := r.Header.Get("Authorization")
+
+	bearerToken, err := auth.ParseBearerToken(header)
+	if err != nil {
+		fmt.Printf("Error parsing bearer token: %s", err)
+		w.WriteHeader(401)
+		return
+	}
+
+	userID, err := auth.ParseUserIDFromJWT(bearerToken)
+	if err != nil {
+		fmt.Printf("Error validating jwt token: %s", err)
+		w.WriteHeader(401)
+		return
+	}
+
+	chirpIDString := r.PathValue("chirpID")
+	chirpID, err := strconv.Atoi(chirpIDString)
+	if err != nil {
+		fmt.Println("Error converting id")
+		w.WriteHeader(401)
+		return
+	}
+
+	err = cfg.db.DeleteChirpFromDB(userID, chirpID)
+	if err != nil {
+		fmt.Printf("Error deleting chirp: %s", err)
+		w.WriteHeader(403)
+		return
+	}
+
+	w.WriteHeader(204)
+}
+
 func main() {
 	err := godotenv.Load()
 	if err != nil {
@@ -508,6 +544,7 @@ func main() {
 	mux.HandleFunc("PUT /api/users", apiCfg.updateUserHandler)
 	mux.HandleFunc("POST /api/refresh", apiCfg.refreshHandler)
 	mux.HandleFunc("POST /api/revoke", apiCfg.revokeHandler)
+	mux.HandleFunc("DELETE /api/chirps/{chirpID}", apiCfg.deleteChirpHandler)
 
 	http.ListenAndServe(srv.Addr, srv.Handler)
 }
