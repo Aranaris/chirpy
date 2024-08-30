@@ -24,6 +24,7 @@ type DB struct {
 type Chirp struct {
 	ID int `json:"id"`
 	Body string `json:"body"`
+	AuthorID int `json:"author_id"`
 }
 
 type User struct {
@@ -113,7 +114,7 @@ func (db *DB) LoadDB() (*DBStructure, error) {
 	return &dbStructure, nil
 }
 
-func (db *DB) CreateChirp(body string) (Chirp, error) {
+func (db *DB) CreateChirp(body string, authorID int) (Chirp, error) {
 	dbStructure, err := db.LoadDB()
 	if err != nil {
 		fmt.Println("error loading db")
@@ -139,6 +140,7 @@ func (db *DB) CreateChirp(body string) (Chirp, error) {
 	newChirp := Chirp{
 		ID: id,
 		Body: body,
+		AuthorID: authorID,
 	}
 
 	dbStructure.Chirps[id] = newChirp

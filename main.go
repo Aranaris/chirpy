@@ -5,13 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"internal/auth"
 	"internal/database"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
 )	
@@ -107,6 +106,21 @@ func replaceProfane(s string) string {
 }
 
 func (cfg *apiConfig) addChirpHandler(w http.ResponseWriter, r *http.Request) {
+	header := r.Header.Get("Authorization")
+
+	bearerToken, err := auth.ParseBearerToken(header)
+	if err != nil {
+		fmt.Printf("Error parsing bearer token: %s", err)
+		w.WriteHeader(401)
+		return
+	}
+
+	ID, err := auth.ParseUserIDFromJWT(bearerToken)
+	if err != nil {
+		fmt.Printf("Error validating jwt token: %s", err)
+		w.WriteHeader(401)
+		return
+	}
 
 	decoder := json.NewDecoder(r.Body)
 	params := database.Chirp{}
@@ -140,7 +154,7 @@ func (cfg *apiConfig) addChirpHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	chirp, err := cfg.db.CreateChirp(replaceProfane(params.Body))
+	chirp, err := cfg.db.CreateChirp(replaceProfane(params.Body), ID)
 	if err != nil {
 		fmt.Printf("Error creating chirp: %s", err)
 		w.WriteHeader(500)
@@ -332,34 +346,19 @@ func (cfg *apiConfig) verifyUserHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 func (cfg *apiConfig) updateUserHandler(w http.ResponseWriter, r *http.Request) {
-	bearerToken := r.Header.Get("Authorization")
-	if bearerToken == "" {
-		fmt.Println("Unauthorized: No jwt in header")
+	header := r.Header.Get("Authorization")
+
+	bearerToken, err := auth.ParseBearerToken(header)
+	if err != nil {
+		fmt.Printf("Error parsing bearer token: %s", err)
 		w.WriteHeader(401)
 		return
 	}
 
-	bearerToken = strings.Replace(bearerToken, "Bearer ", "", 1)
-	token, err := jwt.ParseWithClaims(bearerToken, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) {
-    return []byte(cfg.jwtsecret), nil
-	})
+	ID, err := auth.ParseUserIDFromJWT(bearerToken)
 	if err != nil {
-		fmt.Printf("Error parsing jwt: %s", err)
+		fmt.Printf("Error validating jwt token: %s", err)
 		w.WriteHeader(401)
-		return
-	}
-
-	userID, err := token.Claims.GetSubject()
-	if err != nil {
-		fmt.Printf("Error retrieving claims: %s", err)
-		w.WriteHeader(401)
-		return
-	}
-
-	ID, err := strconv.Atoi(userID)
-	if err != nil {
-		fmt.Printf("Error converting userID: %s", err)
-		w.WriteHeader(500)
 		return
 	}
 
@@ -418,14 +417,15 @@ func (cfg *apiConfig) updateUserHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 func (cfg *apiConfig) refreshHandler(w http.ResponseWriter, r *http.Request) {
-	bearerToken := r.Header.Get("Authorization")
-	if bearerToken == "" {
-		fmt.Println("Unauthorized: No token in header")
+	header := r.Header.Get("Authorization")
+
+	bearerToken, err := auth.ParseBearerToken(header)
+	if err != nil {
+		fmt.Printf("Error parsing bearer token: %s", err)
 		w.WriteHeader(401)
 		return
 	}
 
-	bearerToken = strings.Replace(bearerToken, "Bearer ", "", 1)
 	newJWT, err := cfg.db.GenerateAccessToken(bearerToken)
 	if err != nil {
 		fmt.Printf("Error generating access token: %s", err)
@@ -450,15 +450,16 @@ func (cfg *apiConfig) refreshHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) revokeHandler(w http.ResponseWriter, r *http.Request) {
-	bearerToken := r.Header.Get("Authorization")
-	if bearerToken == "" {
-		fmt.Println("Unauthorized: No token in header")
+	header := r.Header.Get("Authorization")
+
+	bearerToken, err := auth.ParseBearerToken(header)
+	if err != nil {
+		fmt.Printf("Error parsing bearer token: %s", err)
 		w.WriteHeader(401)
 		return
 	}
 
-	bearerToken = strings.Replace(bearerToken, "Bearer ", "", 1)
-	err := cfg.db.RevokeRefreshToken(bearerToken)
+	err = cfg.db.RevokeRefreshToken(bearerToken)
 	if err != nil {
 		fmt.Printf("Error revoking access token: %s", err)
 		w.WriteHeader(500)
