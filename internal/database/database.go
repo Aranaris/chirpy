@@ -33,6 +33,7 @@ type User struct {
 	Token string `json:"token,omitempty"`
 	RefreshToken string `json:"refresh_token,omitempty"`
 	Password string `json:"password,omitempty"`
+	IsChirpyRed bool `json:"is_chirpy_red"`
 }
 
 type RefreshToken struct {
@@ -49,6 +50,7 @@ type DBStructure struct {
 
 var ErrChirpID = errors.New("chirp id out of range")
 var ErrAuthorization = errors.New("Unauthorized action")
+var ErrUserNotFound = errors.New("User not found")
 
 func NewDB(path string) (*DB, error) {
 	fp := path + "/database.json"
@@ -238,6 +240,7 @@ func (db *DB) CreateUser(email string, hashed string) (User, error) {
 		ID: id,
 		Email: email,
 		Password: hashed,
+		IsChirpyRed: false,
 	}
 
 	dbStructure.Users[id] = newUser
@@ -260,7 +263,7 @@ func (db *DB) GetUserByEmail(email string) (User, error) {
 		if users[n].Email == email {
 			user = users[n]
 		} else if n == len(users) {
-			return User{}, errors.New("User not found")
+			return User{}, ErrUserNotFound
 		}
 	}
 
@@ -290,11 +293,36 @@ func (db *DB) UpdateUser(ID int, updatedUser User) (User, error) {
 			db.writeDB(*dbStructure)
 			return user, nil
 		} else if n == len(users) {
-			return User{}, errors.New("User not found")
+			return User{}, ErrUserNotFound
 		}
 	}
-
 	return user, nil
+}
+
+func (db *DB) UpdateChirpyRedStatus (ID int, status bool) error {
+	dbStructure, err := db.LoadDB()
+	if err != nil {
+		fmt.Println("Error loading db structure")
+		return err
+	}
+
+	users := dbStructure.Users
+	user := User{}
+
+	for n := range users {
+		if users[n].ID == ID {
+			user = users[n]
+			if user.IsChirpyRed != status {
+				user.IsChirpyRed = status
+				users[n] = user
+				db.writeDB(*dbStructure)
+				return nil
+			}
+			return errors.New("User status not changed")
+		}
+	}
+	return ErrUserNotFound
+
 }
 
 func (db *DB) GenerateRefreshToken(ID int) (string, error) {

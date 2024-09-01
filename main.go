@@ -26,6 +26,10 @@ type apiConfig struct {
 	jwtsecret string
 }
 
+type errorReturnVal struct {
+	Error string `json:"error"`
+}
+
 func outputHTML(w http.ResponseWriter, filename string, data interface{}) {
 	t, err := template.ParseFiles(filename)
 	if err != nil {
@@ -126,10 +130,6 @@ func (cfg *apiConfig) addChirpHandler(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	params := database.Chirp{}
 
-	type errorReturnVal struct {
-		Error string `json:"error"`
-	}
-	
 	if err := decoder.Decode(&params); err != nil {
 		errorBody := errorReturnVal{
 			Error: "Something went wrong",
@@ -224,10 +224,6 @@ func (cfg *apiConfig) addUserHandler(w http.ResponseWriter, r *http.Request) {
 
 	decoder := json.NewDecoder(r.Body)
 	params := database.User{}
-
-	type errorReturnVal struct {
-		Error string `json:"error"`
-	}
 	
 	if err := decoder.Decode(&params); err != nil {
 		errorBody := errorReturnVal{
@@ -279,10 +275,6 @@ func (cfg *apiConfig) verifyUserHandler(w http.ResponseWriter, r *http.Request) 
 		Expires int `json:"expires_in_seconds"`
 	}
 	params := loginParams{}
-
-	type errorReturnVal struct {
-		Error string `json:"error"`
-	}
 	
 	if err := decoder.Decode(&params); err != nil {
 		errorBody := errorReturnVal{
@@ -334,6 +326,7 @@ func (cfg *apiConfig) verifyUserHandler(w http.ResponseWriter, r *http.Request) 
 		ID: user.ID,
 		Token: jwt,
 		RefreshToken: refreshToken,
+		IsChirpyRed: user.IsChirpyRed,
 	}
 
 	msg, err := json.Marshal(userNoPass)
@@ -366,10 +359,6 @@ func (cfg *apiConfig) updateUserHandler(w http.ResponseWriter, r *http.Request) 
 	decoder := json.NewDecoder(r.Body)
 	params := database.User{}
 
-	type errorReturnVal struct {
-		Error string `json:"error"`
-	}
-	
 	if err := decoder.Decode(&params); err != nil {
 		errorBody := errorReturnVal{
 			Error: "Something went wrong",
@@ -405,6 +394,7 @@ func (cfg *apiConfig) updateUserHandler(w http.ResponseWriter, r *http.Request) 
 	userNoPass := database.User{
 		Email: user.Email,
 		ID: user.ID,
+		IsChirpyRed: user.IsChirpyRed,
 	}
 
 	msg, err := json.Marshal(userNoPass)
@@ -437,7 +427,6 @@ func (cfg *apiConfig) refreshHandler(w http.ResponseWriter, r *http.Request) {
 	type AccessTokenResponse struct {
 		Token string `json:"token"`
 	}
-	
 
 	msg, err := json.Marshal(AccessTokenResponse{Token:newJWT})
 	if err != nil {
@@ -505,6 +494,68 @@ func (cfg *apiConfig) deleteChirpHandler(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(204)
 }
 
+func (cfg *apiConfig) upgradeUserHandler(w http.ResponseWriter, r *http.Request) {
+	decoder := json.NewDecoder(r.Body)
+
+	type UpgradeUserParams struct {
+		Event string `json:"event"`
+		Data struct {
+			UserID int `json:"user_id"`
+		} `json:"data"`
+	}
+
+	params := UpgradeUserParams{}
+	
+	if err := decoder.Decode(&params); err != nil {
+		errorBody := errorReturnVal{
+			Error: "Something went wrong",
+		}
+
+		msg, err := json.Marshal(errorBody)
+		if err != nil {
+			fmt.Printf("Error marshalling JSON: %s", err)
+			w.WriteHeader(500)
+			return
+		}
+
+		fmt.Printf("Error Decoding JSON: %s", err)
+		w.WriteHeader(500)
+		w.Write(msg)
+		return
+	}
+
+	if params.Event != "user.upgraded" {
+		w.WriteHeader(204)
+		return
+	}
+
+	err := cfg.db.UpdateChirpyRedStatus(params.Data.UserID, true)
+	if errors.Is(err, database.ErrUserNotFound) {
+		w.WriteHeader(404)
+		return
+	}
+	if err != nil {
+		fmt.Printf("Error updating user chirpy red status: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+
+	type SuccessReturnValue struct {
+		Body string `json:"body"`
+	}
+
+	msg, err := json.Marshal(SuccessReturnValue{Body:""})
+	if err != nil {
+		fmt.Printf("Error marshalling JSON: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+
+	w.WriteHeader(204)
+	w.Write(msg)
+
+}
+
 func main() {
 	err := godotenv.Load()
 	if err != nil {
@@ -545,6 +596,7 @@ func main() {
 	mux.HandleFunc("POST /api/refresh", apiCfg.refreshHandler)
 	mux.HandleFunc("POST /api/revoke", apiCfg.revokeHandler)
 	mux.HandleFunc("DELETE /api/chirps/{chirpID}", apiCfg.deleteChirpHandler)
+	mux.HandleFunc("POST /api/polka/webhooks", apiCfg.upgradeUserHandler)
 
 	http.ListenAndServe(srv.Addr, srv.Handler)
 }
