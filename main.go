@@ -495,6 +495,13 @@ func (cfg *apiConfig) deleteChirpHandler(w http.ResponseWriter, r *http.Request)
 }
 
 func (cfg *apiConfig) upgradeUserHandler(w http.ResponseWriter, r *http.Request) {
+	header := r.Header.Get("Authorization")
+	apikey := strings.Replace(header, "ApiKey ", "", 1)
+	if apikey != os.Getenv("POLKA_API_KEY") {
+		w.WriteHeader(401)
+		return
+	}
+
 	decoder := json.NewDecoder(r.Body)
 
 	type UpgradeUserParams struct {
