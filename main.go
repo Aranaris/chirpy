@@ -173,7 +173,15 @@ func (cfg *apiConfig) addChirpHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, r *http.Request) {
-	chirps, err := cfg.db.GetChirps()
+	authorIDString := r.URL.Query().Get("author_id")
+	authorID, err := strconv.Atoi(authorIDString)
+	if err != nil {
+		fmt.Printf("Error converting author id: %s", authorIDString)
+		w.WriteHeader(500)
+		return
+	}
+
+	chirps, err := cfg.db.GetChirps(authorID)
 	if err != nil {
 		fmt.Printf("Error getting chirps: %s", err)
 		w.WriteHeader(500)
