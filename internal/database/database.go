@@ -152,7 +152,7 @@ func (db *DB) CreateChirp(body string, authorID int) (Chirp, error) {
 	return newChirp, nil
 }
 
-func (db *DB) GetChirps(authorID int) ([]Chirp, error) {
+func (db *DB) GetChirps(authorID int, sortOrder string) ([]Chirp, error) {
 
 	dbStructure, err := db.LoadDB()
 	if err != nil {
@@ -172,10 +172,18 @@ func (db *DB) GetChirps(authorID int) ([]Chirp, error) {
 		}
 	}
 
-	sort.Slice(v, func(i, j int) bool {
-		return v[i].ID < v[j].ID
-	})
-
+	if sortOrder == "" || sortOrder == "asc" {
+		sort.Slice(v, func(i, j int) bool {
+			return v[i].ID < v[j].ID
+		})
+	} else if sortOrder == "desc" {
+		sort.Slice(v, func(i, j int) bool {
+			return v[i].ID > v[j].ID
+		})
+	} else {
+		return nil, errors.New("Invalid sort param")
+	}
+	
 	return v, nil
 }
 

@@ -174,14 +174,11 @@ func (cfg *apiConfig) addChirpHandler(w http.ResponseWriter, r *http.Request) {
 
 func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, r *http.Request) {
 	authorIDString := r.URL.Query().Get("author_id")
-	authorID, err := strconv.Atoi(authorIDString)
-	if err != nil {
-		fmt.Printf("Error converting author id: %s", authorIDString)
-		w.WriteHeader(500)
-		return
-	}
+	sortParam := r.URL.Query().Get("sort")
 
-	chirps, err := cfg.db.GetChirps(authorID)
+	authorID, _ := strconv.Atoi(authorIDString)
+
+	chirps, err := cfg.db.GetChirps(authorID, sortParam)
 	if err != nil {
 		fmt.Printf("Error getting chirps: %s", err)
 		w.WriteHeader(500)
